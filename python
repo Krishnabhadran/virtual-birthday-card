@@ -1,0 +1,59 @@
+# app.py
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory
+import uuid
+import os
+from werkzeug.utils import secure_filename
+
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB limit
+
+# In-memory storage (replace with database in production)
+cards = {}
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/create-card', methods=['POST'])
+def create_card():
+    card_id = str(uuid.uuid4())
+    
+    # Process form data
+    name = request.form.get('name')
+    quote_type = request.form.get('quoteType')
+    message = request.form.get('message')
+    photo = request.files.get('photo')
+    
+    # Handle file upload
+    photo_path = None
+    if photo and photo.filename != '':
+        filename = secure_filename(f"{card_id}_{photo.filename}")
+        photo.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        photo_path = url_for('static', filename=f'uploads/{filename}')
+    
+    # Store card data
+    cards[card_id] = {
+        'name': name,
+        'quote_type': quote_type,
+        'message': message,
+        'photo': photo_path,
+        'music': url_for('static', filename='birthday.mp3')
+    }
+    
+    return redirect(url_for('show_card', card_id=card_id))
+
+@app.route('/card/<card_id>')
+def show_card(card_id):
+    card = cards.get(card_id)
+    if not card:
+        return "Card not found", 404
+    return render_template('card.html', card=card, card_url=request.url)
+
+@app.route('/static/<path:path>')
+def send_static(path):
+    return send_from_directory('static', path)
+
+if __name__ == '__main__':
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    app.run(debug=True)
